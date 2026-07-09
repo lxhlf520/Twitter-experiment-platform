@@ -192,7 +192,7 @@ export default function HomePage() {
           <div className="space-y-2 text-sm text-gray-600">
             <p>- Groups: Control / Low-signal / High-signal, 1:1:1 random assignment</p>
             <p>- Collection batches: 16:00 / 18:00 / 20:00 incremental pool</p>
-            <p>- Comments: Daily at 20:00, permission check at 19:30</p>
+            <p>- Comments: Daily at 20:00 New York time (EST/EDT), permission check at 19:30</p>
             <p>- Monitoring: t0 / t2h / t4h / t8h / t12h / t24h / t48h / t72h</p>
             <p>- Multi-account rotation + dual-account retry, anti-rate-limit</p>
             <p>- Comments use preset templates only</p>

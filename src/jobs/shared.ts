@@ -113,6 +113,21 @@ export function ts(): string {
   return new Date().toLocaleString();
 }
 
+/**
+ * 获取纽约时间（America/New_York）的本地 Date 对象
+ * 返回的 Date 对象各 get 方法（getHours/getDate 等）返回纽约时间分量
+ */
+export function getNYDate(): Date {
+  const nyStr = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+  return new Date(nyStr);
+}
+
+/** 获取当前纽约时间的日期字符串 YYYY-MM-DD */
+export function nyDateStr(): string {
+  const d = getNYDate();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 // ─── 账号读取 ──────────────────────────────────────────────
 
 /** 读取所有 active 账号 */

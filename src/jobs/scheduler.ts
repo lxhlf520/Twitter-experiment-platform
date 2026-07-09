@@ -1,7 +1,9 @@
 /**
  * 正式实验 - 常驻调度器（Twitter 适配版，Node 原生定时，零外部依赖）
  * ============================================================================
- * 采集分批建池策略：
+ * ⏰ 所有时间均以纽约时间（America/New_York）为基准
+ *
+ * 采集分批建池策略（纽约时间）：
  *   16:00 / 18:00 / 20:00  runCollectBatch  每 2 小时采一批候选追加池，
  *                          跨批筛选累计；合格 ≥150 即停后续批次。
  *   20:00 批次采完后        finalizeExperiment 从池选 90 实验帖建实验
@@ -16,10 +18,10 @@ import { runDailyComment } from './commenter';
 import { runMonitorTick } from './monitor';
 import { runCommentPermissionCheck } from './checker';
 import { closeDb } from '../lib/db';
-import { COLLECT_HOURS, ts } from './shared';
+import { COLLECT_HOURS, ts, getNYDate, nyDateStr } from './shared';
 
-const COMMENT_HOUR = 20;
-const CHECK_HOUR = 19;
+const COMMENT_HOUR = 20;  // 纽约时间 20:00 发评论
+const CHECK_HOUR = 19;    // 纽约时间 19:30 权限检测
 const CHECK_MINUTE = 30;
 const MONITOR_INTERVAL_MIN = 30;
 
@@ -43,9 +45,7 @@ async function guarded(name: string, fn: () => Promise<unknown>): Promise<void> 
   }
 }
 
-function dateStr(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
+
 
 function claimHour(today: string, hour: number): boolean {
   let set = firedHours.get(today);
@@ -68,27 +68,27 @@ async function runCommentPipeline(): Promise<void> {
 }
 
 async function heartbeat(): Promise<void> {
-  const nowDate = new Date();
-  const today = dateStr(nowDate);
-  const hour = nowDate.getHours();
-  const minute = nowDate.getMinutes();
+  const ny = getNYDate();
+  const today = nyDateStr();
+  const hour = ny.getHours();
+  const minute = ny.getMinutes();
 
   if (hour === CHECK_HOUR && minute === CHECK_MINUTE && today !== checkedCommentPermToday) {
     checkedCommentPermToday = today;
-    await guarded('19:30 评论权限检测', runCommentPermissionCheck);
+    await guarded(`${CHECK_HOUR}:${CHECK_MINUTE} 评论权限检测`, runCommentPermissionCheck);
     return;
   }
 
   if (minute < MONITOR_INTERVAL_MIN && COLLECT_HOURS.includes(hour) && claimHour(today, hour)) {
     if (hour === COMMENT_HOUR) {
-      await guarded('20点采集+选帖+评论', runCommentPipeline);
+      await guarded(`${COMMENT_HOUR}点采集+选帖+评论`, runCommentPipeline);
     } else {
       await guarded(`${hour}点采集批次`, runCollectBatch);
     }
     return;
   }
 
-  const totalMin = Math.floor(nowDate.getTime() / 60000);
+  const totalMin = Math.floor(ny.getTime() / 60000);
   if (totalMin % MONITOR_INTERVAL_MIN === 0 && totalMin !== lastMonitorMinute) {
     lastMonitorMinute = totalMin;
     await guarded('监控tick', runMonitorTick);
@@ -97,8 +97,9 @@ async function heartbeat(): Promise<void> {
 
 function main(): void {
   console.log(`${'='.repeat(60)}`);
-  console.log(`Twitter 正式实验调度器启动  [${ts()}]`);
+  console.log(`Twitter 正式实验调度器启动（纽约时间） [${ts()}]`);
   console.log(`  采集批次: ${COLLECT_HOURS.join('/')}点 | ${CHECK_HOUR}:${CHECK_MINUTE} 权限检测 | ${COMMENT_HOUR}点批后选帖+评论 | 每${MONITOR_INTERVAL_MIN}min 监控`);
+  console.log(`  当前纽约时间: ${nyDateStr()} ${String(getNYDate().getHours()).padStart(2,'0')}:${String(getNYDate().getMinutes()).padStart(2,'0')}`);
   console.log(`${'='.repeat(60)}`);
 
   setInterval(() => {
