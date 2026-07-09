@@ -5,6 +5,7 @@
  */
 
 import { query } from '../lib/db';
+import type { TwitterCredentials } from '../lib/twitter-api';
 
 // ─── 类型定义 ──────────────────────────────────────────────
 
@@ -12,10 +13,8 @@ export interface TwitterAccount {
   id: string;
   nickname: string;
   twitter_handle: string;
-  api_key: string;
-  api_secret: string;
-  access_token: string;
-  access_token_secret: string;
+  auth_token: string;
+  ct0: string;
   daily_comment_count: number;
   max_daily_comments: number;
   status: string;
@@ -143,4 +142,9 @@ export async function getCommentableAccounts(): Promise<TwitterAccount[]> {
     can_comment: { $ne: false },
   });
   return rows;
+}
+
+/** 从 TwitterAccount 提取 Cookie 凭据 */
+export function getCredentials(acc: TwitterAccount): TwitterCredentials {
+  return { authToken: acc.auth_token, ct0: acc.ct0 };
 }

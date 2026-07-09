@@ -1,4 +1,4 @@
-import { TweetV2 } from 'twitter-api-v2';
+import type { TweetResult, UserResult } from './twitter-api';
 import { ScreeningPost } from '../jobs/shared';
 
 /**
@@ -38,35 +38,27 @@ const AI_IDENTITY_KEYWORDS = ['ai', 'bot', 'chatgpt', 'gpt', 'artificial intelli
 /**
  * 检查是否为原创帖子（非转发）
  */
-function isOriginal(tweet: TweetV2): boolean {
-  // Twitter API v2: referenced_tweets 中有 retweeted 或 quoted 类型代表非原创
-  const refs = tweet.referenced_tweets || [];
-  return !refs.some(r => r.type === 'retweeted');
+function isOriginal(tweet: TweetResult): boolean {
+  return !tweet.legacy?.retweeted_status_result;
 }
 
 /**
  * 检查帖子是否公开可见
  */
-function isPublic(tweet: TweetV2): boolean {
-  // Twitter API v2 中返回的推文默认是公开的
+function isPublic(_tweet: TweetResult): boolean {
   return true;
 }
 
 /**
  * 检查用户是否为普通个人账号（排除官方/机构账号）
  */
-function isNormalUser(tweet: TweetV2, author: any): boolean {
-  // verified_type: 'blue' = Twitter Blue 订阅（个人也能买，不过滤）
-  // 排除带有 verified 且 follower 极少的情况（可能是假号）
-  if (author?.verified && (author?.public_metrics?.followers_count || 0) < 100) {
+function isNormalUser(_tweet: TweetResult, author: UserResult | null): boolean {
+  if (author?.legacy?.verified && (author?.legacy?.followers_count || 0) < 100) {
     return false;
   }
   return true;
 }
 
-/**
- * 检查内容是否包含排除关键词
- */
 function containsExcludeKeywords(text: string, keywords: string[]): boolean {
   const lower = text.toLowerCase();
   return keywords.some((kw) => lower.includes(kw.toLowerCase()));
@@ -75,10 +67,10 @@ function containsExcludeKeywords(text: string, keywords: string[]): boolean {
 /**
  * AI回复三层过滤 - 第二层：排除简介含AI身份线索的用户
  */
-function filterLayer2_aiProfile(items: { tweet: TweetV2; author: any; sp: ScreeningPost }[]): { tweet: TweetV2; author: any; sp: ScreeningPost }[] {
+function filterLayer2_aiProfile(items: { tweet: TweetResult; author: UserResult | null; sp: ScreeningPost }[]): { tweet: TweetResult; author: UserResult | null; sp: ScreeningPost }[] {
   return items.filter(({ author }) => {
-    const userName = (author?.name || '').toLowerCase();
-    const userDesc = (author?.description || '').toLowerCase();
+    const userName = (author?.legacy?.name || '').toLowerCase();
+    const userDesc = (author?.legacy?.description || '').toLowerCase();
     return !AI_IDENTITY_KEYWORDS.some(
       (kw) => userName.includes(kw.toLowerCase()) || userDesc.includes(kw.toLowerCase()),
     );
@@ -88,10 +80,10 @@ function filterLayer2_aiProfile(items: { tweet: TweetV2; author: any; sp: Screen
 /**
  * 用户去重：确保POST池中的用户不重复
  */
-function deduplicateUsers(items: { tweet: TweetV2; author: any; sp: ScreeningPost }[]): { tweet: TweetV2; author: any; sp: ScreeningPost }[] {
+function deduplicateUsers(items: { tweet: TweetResult; author: UserResult | null; sp: ScreeningPost }[]): { tweet: TweetResult; author: UserResult | null; sp: ScreeningPost }[] {
   const seenUids = new Set<string>();
   return items.filter(({ author }) => {
-    const uid = author?.id || '';
+    const uid = author?.rest_id || '';
     if (seenUids.has(uid)) return false;
     seenUids.add(uid);
     return true;
@@ -101,18 +93,18 @@ function deduplicateUsers(items: { tweet: TweetV2; author: any; sp: ScreeningPos
 /**
  * 从 tweet object 提取 ScreeningPost
  */
-function extractScreeningPost(tweet: TweetV2, author: any): ScreeningPost {
+function extractScreeningPost(tweet: TweetResult, author: UserResult | null): ScreeningPost {
   return {
-    postId: tweet.id,
-    postUrl: `https://twitter.com/i/status/${tweet.id}`,
-    content: tweet.text || '',
-    authorUid: author?.id || '',
-    authorName: author?.name || author?.username || '',
-    followers: author?.public_metrics?.followers_count || 0,
-    commentsCount: tweet.public_metrics?.reply_count || 0,
-    repostsCount: tweet.public_metrics?.retweet_count || 0,
-    likesCount: tweet.public_metrics?.like_count || 0,
-    publishedAt: tweet.created_at || '',
+    postId: tweet.rest_id,
+    postUrl: `https://twitter.com/i/status/${tweet.rest_id}`,
+    content: tweet.legacy?.full_text || '',
+    authorUid: author?.rest_id || tweet.core?.user_results?.result?.rest_id || '',
+    authorName: author?.legacy?.name || author?.legacy?.screen_name || '',
+    followers: author?.legacy?.followers_count || 0,
+    commentsCount: tweet.legacy?.reply_count || 0,
+    repostsCount: tweet.legacy?.retweet_count || 0,
+    likesCount: tweet.legacy?.favorite_count || 0,
+    publishedAt: tweet.legacy?.created_at || '',
   };
 }
 
@@ -120,8 +112,8 @@ function extractScreeningPost(tweet: TweetV2, author: any): ScreeningPost {
  * 主筛选函数：从搜索结果中筛选符合条件的Post
  */
 export async function screenTweets(
-  tweets: TweetV2[],
-  authors: Map<string, any>,
+  tweets: TweetResult[],
+  authors: Map<string, UserResult>,
   criteria: ScreeningCriteria = {},
 ): Promise<{ passed: ScreeningPost[]; rejected: ScreeningPost[] }> {
   const {
@@ -136,15 +128,15 @@ export async function screenTweets(
   const passed: ScreeningPost[] = [];
   const rejected: ScreeningPost[] = [];
 
-  // Calculate cutoff time
   const cutoffTime = Date.now() - maxHoursAgo * 3600 * 1000;
 
-  let enriched: { tweet: TweetV2; author: any; sp: ScreeningPost }[] = [];
+  let enriched: { tweet: TweetResult; author: UserResult | null; sp: ScreeningPost }[] = [];
 
   for (const tweet of tweets) {
-    const author = authors.get(tweet.author_id || '') || {};
+    const authorId = tweet.core?.user_results?.result?.rest_id || '';
+    const author = authors.get(authorId) || null;
     const sp = extractScreeningPost(tweet, author);
-    const postTime = new Date(tweet.created_at || '').getTime();
+    const postTime = new Date(tweet.legacy?.created_at || '').getTime();
 
     // Time check
     if (!postTime || postTime < cutoffTime) {
@@ -171,14 +163,14 @@ export async function screenTweets(
     }
 
     // Word count check (English words)
-    const wordCount = (tweet.text || '').split(/\s+/).filter((w: string) => w.length > 0).length;
+    const wordCount = (tweet.legacy?.full_text || '').split(/\s+/).filter((w: string) => w.length > 0).length;
     if (wordCount < minWords) {
       rejected.push({ ...sp, failReason: `Fewer than ${minWords} words` });
       continue;
     }
 
     // Comments count range check
-    const cc = tweet.public_metrics?.reply_count || 0;
+    const cc = tweet.legacy?.reply_count || 0;
     if (cc < minComments || cc > maxComments) {
       rejected.push({
         ...sp,
@@ -188,14 +180,14 @@ export async function screenTweets(
     }
 
     // Followers check
-    const followers = author?.public_metrics?.followers_count || 0;
+    const followers = author?.legacy?.followers_count || 0;
     if (followers >= maxFollowers) {
       rejected.push({ ...sp, failReason: `Followers ${followers} exceeds ${maxFollowers}` });
       continue;
     }
 
     // Exclude keywords check
-    if (containsExcludeKeywords(tweet.text || '', excludeKeywords)) {
+    if (containsExcludeKeywords(tweet.legacy?.full_text || '', excludeKeywords)) {
       rejected.push({ ...sp, failReason: 'Contains excluded keywords' });
       continue;
     }

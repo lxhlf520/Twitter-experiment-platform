@@ -22,10 +22,10 @@ export async function POST(request: NextRequest) {
   if (auth instanceof Response) return auth;
   try {
     const body = await request.json();
-    const { twitter_handle, api_key, api_secret, access_token, access_token_secret, nickname, avatar } = body;
+    const { twitter_handle, auth_token, ct0, nickname, avatar } = body;
 
-    if (!api_key || !api_secret || !access_token || !access_token_secret || !twitter_handle) {
-      return NextResponse.json({ error: 'All OAuth credential fields are required' }, { status: 400 });
+    if (!auth_token || !ct0 || !twitter_handle) {
+      return NextResponse.json({ error: 'auth_token, ct0, and twitter_handle are required' }, { status: 400 });
     }
 
     let action = 'created';
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
           'twitter_accounts',
           { id: existing.id },
           {
-            api_key, api_secret, access_token, access_token_secret,
+            auth_token, ct0,
             nickname: nickname || null, avatar: avatar || null,
             updated_at: new Date().toISOString(),
           },
@@ -54,10 +54,8 @@ export async function POST(request: NextRequest) {
     account = await insert('twitter_accounts', {
       user_id: auth.id,
       twitter_handle,
-      api_key,
-      api_secret,
-      access_token,
-      access_token_secret,
+      auth_token,
+      ct0,
       nickname: nickname || null,
       avatar: avatar || null,
       status: 'active',
@@ -88,16 +86,14 @@ export async function PATCH(request: NextRequest) {
   if (auth instanceof Response) return auth;
   try {
     const body = await request.json();
-    const { id, status, api_key, api_secret, access_token, access_token_secret,
+    const { id, status, auth_token, ct0,
             daily_comment_count, nickname, avatar, can_comment } = body;
     if (!id) return NextResponse.json({ error: 'Missing account ID' }, { status: 400 });
 
     const sets: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (status !== undefined) sets.status = status;
-    if (api_key !== undefined) sets.api_key = api_key;
-    if (api_secret !== undefined) sets.api_secret = api_secret;
-    if (access_token !== undefined) sets.access_token = access_token;
-    if (access_token_secret !== undefined) sets.access_token_secret = access_token_secret;
+    if (auth_token !== undefined) sets.auth_token = auth_token;
+    if (ct0 !== undefined) sets.ct0 = ct0;
     if (daily_comment_count !== undefined) sets.daily_comment_count = daily_comment_count;
     if (nickname !== undefined) sets.nickname = nickname;
     if (avatar !== undefined) sets.avatar = avatar;

@@ -3,15 +3,7 @@ import { authenticateRequest } from '@/lib/auth';
 import { query, insert } from '@/lib/db';
 import { screenTweets } from '@/lib/post-screener';
 import { searchTweets, getTweet } from '@/lib/twitter-api';
-import { getActiveAccounts } from '@/jobs/shared';
-
-interface TwitterAccount {
-  id: string;
-  api_key: string;
-  api_secret: string;
-  access_token: string;
-  access_token_secret: string;
-}
+import { getActiveAccounts, getCredentials } from '@/jobs/shared';
 
 export async function GET(request: NextRequest) {
   const auth = await authenticateRequest(request);
@@ -45,12 +37,7 @@ export async function POST(request: NextRequest) {
       if (accounts.length === 0)
         return NextResponse.json({ error: 'No active accounts' }, { status: 400 });
 
-      const creds = {
-        apiKey: accounts[0].api_key,
-        apiSecret: accounts[0].api_secret,
-        accessToken: accounts[0].access_token,
-        accessTokenSecret: accounts[0].access_token_secret,
-      };
+      const creds = getCredentials(accounts[0]);
 
       // Search and screen tweets
       const allTweets: any[] = [];
@@ -63,7 +50,7 @@ export async function POST(request: NextRequest) {
             allTweets.push(t);
           }
           for (const user of result.includes?.users || []) {
-            authorMap.set(user.id, user);
+            authorMap.set(user.rest_id, user);
           }
         } catch {
           // skip

@@ -19,16 +19,8 @@ import {
   ts,
   now,
   getActiveAccounts,
+  getCredentials,
 } from './shared';
-
-function getCredentials(acc: TwitterAccount) {
-  return {
-    apiKey: acc.api_key,
-    apiSecret: acc.api_secret,
-    accessToken: acc.access_token,
-    accessTokenSecret: acc.access_token_secret,
-  };
-}
 
 function pickProbeText(): string {
   return PROBE_COMMENTS[Math.floor(Math.random() * PROBE_COMMENTS.length)];

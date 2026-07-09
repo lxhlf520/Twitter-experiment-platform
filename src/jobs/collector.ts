@@ -17,6 +17,7 @@
 import { insert, query, maybeOne, updateOne, upsert, count } from '../lib/db';
 import { randomizeAndGroup, assignTemplates } from '../lib/experiment-engine';
 import { searchTweets, getTweet } from '../lib/twitter-api';
+import type { TweetResult, UserResult } from '../lib/twitter-api';
 import {
   ScreeningPost,
   TwitterAccount,
@@ -31,6 +32,7 @@ import {
   ts,
   now,
   getActiveAccounts,
+  getCredentials,
 } from './shared';
 
 const POOL = 'candidate_pool';
@@ -63,30 +65,20 @@ async function getOrCreateCollectingExp(): Promise<{ id: string; pool_full?: boo
   return created ? { id: String(created.id), batch_count: 0, seen_mids: [] } : null;
 }
 
-/** 用 Twitter API 搜索推文并筛选 */
-function getCredentials(acc: TwitterAccount) {
-  return {
-    apiKey: acc.api_key,
-    apiSecret: acc.api_secret,
-    accessToken: acc.access_token,
-    accessTokenSecret: acc.access_token_secret,
-  };
-}
-
-/** Convert Twitter API result to ScreeningPost */
-function extractScreeningPost(tweet: any, author: any): ScreeningPost | null {
+/** Convert Twitter GraphQL API result (TweetResult) to ScreeningPost */
+function extractScreeningPost(tweet: TweetResult | null, author: UserResult | null): ScreeningPost | null {
   if (!tweet) return null;
-  const content = tweet.text || '';
-  const followers = author?.public_metrics?.followers_count || 0;
-  const cc = tweet.public_metrics?.reply_count || 0;
-  const rp = tweet.public_metrics?.retweet_count || 0;
-  const lk = tweet.public_metrics?.like_count || 0;
-  const postTime = new Date(tweet.created_at || '').getTime();
+  const content = tweet.legacy?.full_text || '';
+  const followers = author?.legacy?.followers_count || 0;
+  const cc = tweet.legacy?.reply_count || 0;
+  const rp = tweet.legacy?.retweet_count || 0;
+  const lk = tweet.legacy?.favorite_count || 0;
+  const postTime = new Date(tweet.legacy?.created_at || '').getTime();
   const cutoff = Date.now() - 12 * 3600 * 1000;
-  const isRetweet = (tweet.referenced_tweets || []).some((r: any) => r.type === 'retweeted');
+  const isRetweet = !!tweet.legacy?.retweeted_status_result;
   const wordCount = (content || '').split(/\s+/).filter((w: string) => w.length > 0).length;
-  const authorUid = author?.id || tweet.author_id || '';
-  const authorName = author?.name || author?.username || '';
+  const authorUid = author?.rest_id || tweet.core?.user_results?.result?.rest_id || '';
+  const authorName = author?.legacy?.name || author?.legacy?.screen_name || '';
 
   // Hard filtering
   if (!postTime || postTime < cutoff) return null;
@@ -97,8 +89,8 @@ function extractScreeningPost(tweet: any, author: any): ScreeningPost | null {
   if (EXCLUDE_KW.some((kw) => content.toLowerCase().includes(kw.toLowerCase()))) return null;
 
   return {
-    postId: tweet.id,
-    postUrl: `https://twitter.com/i/status/${tweet.id}`,
+    postId: tweet.rest_id,
+    postUrl: `https://twitter.com/i/status/${tweet.rest_id}`,
     content,
     authorUid,
     authorName,
@@ -106,7 +98,7 @@ function extractScreeningPost(tweet: any, author: any): ScreeningPost | null {
     commentsCount: cc,
     repostsCount: rp,
     likesCount: lk,
-    publishedAt: tweet.created_at,
+    publishedAt: tweet.legacy?.created_at || '',
   };
 }
 
@@ -152,7 +144,7 @@ export async function runCollectBatch(): Promise<{ experimentId: string; qualifi
           startTime,
         });
         for (const t of result.tweets) {
-          if (!seen.has(t.id)) batchTweetIds.add(t.id);
+          if (!seen.has(t.rest_id)) batchTweetIds.add(t.rest_id);
         }
       } catch {
         /* single failure skip */

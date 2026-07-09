@@ -8,10 +8,8 @@ interface TwitterAccount {
   twitter_handle: string;
   nickname: string;
   avatar: string;
-  api_key: string;
-  api_secret: string;
-  access_token: string;
-  access_token_secret: string;
+  auth_token: string;
+  ct0: string;
   status: string;
   daily_comment_count: number;
   max_daily_comments: number;
@@ -32,10 +30,8 @@ export default function AccountsPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [formNickname, setFormNickname] = useState('');
   const [formHandle, setFormHandle] = useState('');
-  const [formApiKey, setFormApiKey] = useState('');
-  const [formApiSecret, setFormApiSecret] = useState('');
-  const [formAccessToken, setFormAccessToken] = useState('');
-  const [formAccessSecret, setFormAccessSecret] = useState('');
+  const [formAuthToken, setFormAuthToken] = useState('');
+  const [formCt0, setFormCt0] = useState('');
   const [saving, setSaving] = useState(false);
 
   const fetchAccounts = useCallback(async () => {
@@ -57,8 +53,8 @@ export default function AccountsPage() {
   }, [isAuthenticated, fetchAccounts]);
 
   const addAccount = async () => {
-    if (!formApiKey || !formApiSecret || !formAccessToken || !formAccessSecret || !formHandle) {
-      setError('All OAuth credential fields are required');
+    if (!formAuthToken || !formCt0 || !formHandle) {
+      setError('auth_token, ct0 and Twitter Handle are required');
       return;
     }
     setSaving(true);
@@ -73,10 +69,8 @@ export default function AccountsPage() {
         body: JSON.stringify({
           nickname: formNickname || formHandle,
           twitter_handle: formHandle,
-          api_key: formApiKey,
-          api_secret: formApiSecret,
-          access_token: formAccessToken,
-          access_token_secret: formAccessSecret,
+          auth_token: formAuthToken,
+          ct0: formCt0,
         }),
       });
       const data = await resp.json();
@@ -96,10 +90,8 @@ export default function AccountsPage() {
   const resetForm = () => {
     setFormNickname('');
     setFormHandle('');
-    setFormApiKey('');
-    setFormApiSecret('');
-    setFormAccessToken('');
-    setFormAccessSecret('');
+    setFormAuthToken('');
+    setFormCt0('');
   };
 
   const deleteAccount = async (id: number) => {
@@ -172,7 +164,7 @@ export default function AccountsPage() {
         <div className="text-center py-12 bg-white rounded-xl shadow-sm">
           <p className="text-gray-400 text-lg mb-4">No Twitter accounts yet</p>
           <p className="text-gray-400 text-sm">
-            Click the button above to add OAuth 1.0a credentials (API Key, API Secret, Access Token, Access Token Secret)
+            Click the button above to add Twitter Cookie credentials (auth_token + ct0 from browser F12 → Application → Cookies → x.com)
           </p>
         </div>
       ) : (
@@ -230,10 +222,10 @@ export default function AccountsPage() {
       {showAddModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <h2 className="text-lg font-bold mb-4">Add Twitter Account (OAuth 1.0a)</h2>
+            <h2 className="text-lg font-bold mb-4">Add Twitter Account (Cookie)</h2>
             <p className="text-sm text-gray-500 mb-4">
-              Enter OAuth 1.0a credentials from the Twitter Developer Portal.
-              The account will be used for tweet collection and comment posting.
+              Open Twitter in browser → F12 → Application → Cookies → x.com,
+              copy <code className="bg-gray-100 px-1 rounded">auth_token</code> and <code className="bg-gray-100 px-1 rounded">ct0</code>.
             </p>
 
             <div className="space-y-3">
@@ -257,39 +249,22 @@ export default function AccountsPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">API Key *</label>
-                <input
-                  type="password" value={formApiKey}
-                  onChange={(e) => setFormApiKey(e.target.value)}
-                  placeholder="Consumer API Key"
-                  className="w-full border rounded-lg px-3 py-2 text-sm"
+                <label className="block text-sm font-medium text-gray-700 mb-1">auth_token *</label>
+                <textarea
+                  value={formAuthToken}
+                  onChange={(e) => setFormAuthToken(e.target.value)}
+                  placeholder="Paste auth_token from browser cookies"
+                  className="w-full border rounded-lg px-3 py-2 text-sm font-mono break-all"
+                  rows={3}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">API Secret Key *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">ct0 *</label>
                 <input
-                  type="password" value={formApiSecret}
-                  onChange={(e) => setFormApiSecret(e.target.value)}
-                  placeholder="Consumer API Secret"
-                  className="w-full border rounded-lg px-3 py-2 text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Access Token *</label>
-                <input
-                  type="password" value={formAccessToken}
-                  onChange={(e) => setFormAccessToken(e.target.value)}
-                  placeholder="OAuth Access Token"
-                  className="w-full border rounded-lg px-3 py-2 text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Access Token Secret *</label>
-                <input
-                  type="password" value={formAccessSecret}
-                  onChange={(e) => setFormAccessSecret(e.target.value)}
-                  placeholder="OAuth Access Token Secret"
-                  className="w-full border rounded-lg px-3 py-2 text-sm"
+                  type="text" value={formCt0}
+                  onChange={(e) => setFormCt0(e.target.value)}
+                  placeholder="Paste ct0 from browser cookies"
+                  className="w-full border rounded-lg px-3 py-2 text-sm font-mono"
                 />
               </div>
             </div>

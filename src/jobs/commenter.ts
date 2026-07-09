@@ -19,6 +19,7 @@ import {
   now,
   getActiveAccounts,
   getCommentableAccounts,
+  getCredentials,
 } from './shared';
 
 interface PostRow {
@@ -41,15 +42,6 @@ interface LogRow {
   status: string;
 }
 
-function getCredentials(acc: TwitterAccount) {
-  return {
-    apiKey: acc.api_key,
-    apiSecret: acc.api_secret,
-    accessToken: acc.access_token,
-    accessTokenSecret: acc.access_token_secret,
-  };
-}
-
 /** 采集单实验全部帖子的 t0 基线快照 */
 async function captureBaseline(experimentId: string, accounts: TwitterAccount[]): Promise<number> {
   const { rows: posts } = await query<PostRow>('posts', { experiment_id: experimentId });
@@ -64,9 +56,9 @@ async function captureBaseline(experimentId: string, accounts: TwitterAccount[])
         post_id: String(p.id),
         tweet_id: p.post_id,
         time_point: 't0',
-        comments_count: tweet.public_metrics?.reply_count || 0,
-        reposts_count: tweet.public_metrics?.retweet_count || 0,
-        likes_count: tweet.public_metrics?.like_count || 0,
+        comments_count: tweet.legacy?.reply_count || 0,
+        reposts_count: tweet.legacy?.retweet_count || 0,
+        likes_count: tweet.legacy?.favorite_count || 0,
         captured_at: now(),
       });
       ok++;

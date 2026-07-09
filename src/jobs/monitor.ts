@@ -21,20 +21,12 @@ import {
   ts,
   now,
   getActiveAccounts,
+  getCredentials,
 } from './shared';
 
 interface PostRow {
   id: string;
   post_id: string;
-}
-
-function getCredentials(acc: TwitterAccount) {
-  return {
-    apiKey: acc.api_key,
-    apiSecret: acc.api_secret,
-    accessToken: acc.access_token,
-    accessTokenSecret: acc.access_token_secret,
-  };
 }
 
 /** 采集指定实验在指定监控点的全部帖快照 */
@@ -50,9 +42,9 @@ async function capturePoint(experimentId: string, point: string, accounts: Twitt
         post_id: String(p.id),
         tweet_id: p.post_id,
         time_point: point,
-        comments_count: tweet.public_metrics?.reply_count || 0,
-        reposts_count: tweet.public_metrics?.retweet_count || 0,
-        likes_count: tweet.public_metrics?.like_count || 0,
+        comments_count: tweet.legacy?.reply_count || 0,
+        reposts_count: tweet.legacy?.retweet_count || 0,
+        likes_count: tweet.legacy?.favorite_count || 0,
         captured_at: now(),
       });
       ok++;
