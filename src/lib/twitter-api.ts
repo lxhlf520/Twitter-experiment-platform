@@ -8,19 +8,77 @@
  *   复制 auth_token 和 ct0 两个字段的值即可。
  */
 
+import { HttpsProxyAgent } from 'https-proxy-agent';
+import https from 'https';
+import http from 'http';
+
 export interface TwitterCredentials {
   authToken: string;
   ct0: string;
 }
 
+// ─── 代理配置 ──────────────────────────────────────────────
+const PROXY_URL = process.env.HTTPS_PROXY || process.env.HTTP_PROXY || 'http://127.0.0.1:7890';
+const proxyAgent = new HttpsProxyAgent(PROXY_URL);
+
+/**
+ * 基于 https 模块的 fetch 替代，走 HTTP 代理。
+ * Node.js 内建 fetch (undici) 不接受 http.Agent 作为 dispatcher，
+ * 因此用 https.request + HttpsProxyAgent 实现代理请求。
+ */
+function fetchWithProxy(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const url = typeof input === 'string' ? new URL(input) : input instanceof URL ? input : new URL(input.url);
+  const isHttps = url.protocol === 'https:';
+  const transport = isHttps ? https : http;
+
+  return new Promise((resolve, reject) => {
+    const options: https.RequestOptions = {
+      hostname: url.hostname,
+      port: url.port || (isHttps ? 443 : 80),
+      path: url.pathname + url.search,
+      method: init?.method || 'GET',
+      headers: init?.headers as Record<string, string> || {},
+      agent: proxyAgent,
+      timeout: 30_000,
+    };
+
+    const req = transport.request(options, (res) => {
+      const chunks: Buffer[] = [];
+      res.on('data', (chunk: Buffer) => chunks.push(chunk));
+      res.on('end', () => {
+        const body = Buffer.concat(chunks);
+        const response = {
+          status: res.statusCode || 0,
+          statusText: res.statusMessage || '',
+          ok: (res.statusCode || 0) >= 200 && (res.statusCode || 0) < 300,
+          headers: new Headers(res.headers as Record<string, string>),
+          text: () => Promise.resolve(body.toString('utf-8')),
+          json: () => Promise.resolve(JSON.parse(body.toString('utf-8'))),
+          arrayBuffer: () => Promise.resolve(body.buffer),
+          bodyUsed: false,
+        } as unknown as Response;
+        resolve(response);
+      });
+    });
+
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('Request timeout')); });
+
+    if (init?.body) {
+      req.write(init.body);
+    }
+    req.end();
+  });
+}
+
 // ─── Twitter 内部 GraphQL queryId（需随版本更新）───────────
 // 这些 ID 可从 Twitter 网页源码中的 main.*.js 提取，若失效需更新。
 const QUERY_IDS = {
-  SearchTimeline: 'gkjsKepM6gl_HmFWoWKfgg',
-  TweetDetail: 'nVK5TAzE5Pw2xwXrk3eGIA',
-  CreateTweet: 'tTsjMKyhajZvK4qRmpArFg',
-  DeleteTweet: 'VaenaVgh5q5ih7kvyVjgtg',
-  UserByScreenName: 'G3KGOASz96M-Qu0nwmGJNQ',
+  SearchTimeline: 'Bcw3RzK-PatNAmbnw54hFw',
+  TweetDetail: 'jd3V43oDY9cY7obs1YMfbQ',
+  CreateTweet: 'R5EPiGHgSqbTYFyozd-gFw',
+  DeleteTweet: 'nxpZCY2K-I6QoFHAHeojFQ',
+  UserByScreenName: '2qvSHpkWTMS9i0zJAwDNiA',
 } as const;
 
 // Twitter 公开的 guest Bearer Token（网页端内置）
@@ -51,32 +109,45 @@ async function gqlFetch<T>(
   features?: Record<string, unknown>,
   method: 'GET' | 'POST' = 'GET',
 ): Promise<T | null> {
-  const url = new URL(`${BASE}/${queryId}/${operationName}`);
-  url.searchParams.set('variables', JSON.stringify(variables));
-  if (features) url.searchParams.set('features', JSON.stringify(features));
-
   try {
+    const url = `${BASE}/${queryId}/${operationName}`;
     const init: RequestInit = {
       method,
       headers: headers(creds),
     };
-    // POST for CreateTweet, GET for queries
+
+    let resp: Response;
     if (method === 'POST') {
-      init.body = JSON.stringify({
-        variables,
-        features: features || {},
-        queryId,
-      });
-      // For POST, use base URL without query params
-      const postUrl = `${BASE}/${queryId}/${operationName}`;
-      const resp = await fetch(postUrl, init);
-      const data = await resp.json();
-      return (data?.data?.[operationName] ?? null) as T | null;
+      init.body = JSON.stringify({ variables, features: features || {}, queryId });
+      resp = await fetchWithProxy(url, init);
+    } else {
+      const getUrl = new URL(url);
+      getUrl.searchParams.set('variables', JSON.stringify(variables));
+      if (features) getUrl.searchParams.set('features', JSON.stringify(features));
+      resp = await fetchWithProxy(getUrl.toString(), init);
     }
-    const resp = await fetch(url.toString(), init);
-    const data = await resp.json();
-    return (data?.data?.[operationName] ?? null) as T | null;
-  } catch {
+
+    if (resp.status === 429) {
+      console.warn(`[twitter-api] 429 rate limited for ${operationName}, waiting 60s...`);
+      await new Promise(r => setTimeout(r, 60_000));
+      return gqlFetch(creds, queryId, operationName, variables, features, method);
+    }
+
+    const raw = await resp.text();
+    if (!resp.ok) {
+      console.error(`[twitter-api] HTTP ${resp.status} for ${operationName}: ${raw.substring(0, 200)}`);
+      return null;
+    }
+
+    try {
+      const respData = JSON.parse(raw);
+      return respData?.data as T | null;
+    } catch {
+      console.error(`[twitter-api] JSON parse error for ${operationName}: ${raw.substring(0, 200)}`);
+      return null;
+    }
+  } catch (e) {
+    console.error(`[twitter-api] gqlFetch ${operationName} error:`, (e as Error).message);
     return null;
   }
 }
@@ -104,9 +175,11 @@ export interface TweetResult {
 
 export interface UserResult {
   rest_id: string;
-  legacy: {
-    name: string;
+  core?: {
     screen_name: string;
+    name: string;
+  };
+  legacy?: {
     description?: string;
     followers_count: number;
     friends_count: number;
@@ -127,7 +200,7 @@ interface TimelineEntry {
 
 // ─── SearchTimeline ────────────────────────────────────────
 
-interface SearchTimelineResponse {
+interface SearchTimelineData {
   search_by_raw_query?: {
     search_timeline?: {
       timeline?: {
@@ -156,31 +229,45 @@ export async function searchTweets(
     variables.startTime = options.startTime.toISOString();
   }
 
-  const data = await gqlFetch<SearchTimelineResponse>(
-    creds, QUERY_IDS.SearchTimeline, 'SearchTimeline', variables,
-  );
+  // SearchTimeline 使用 POST，响应的 data 键名是 search_by_raw_query 而非 operationName
+  try {
+    const url = `${BASE}/${QUERY_IDS.SearchTimeline}/SearchTimeline`;
+    const resp = await fetchWithProxy(url, {
+      method: 'POST',
+      headers: { ...headers(creds), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        variables,
+        features: {},
+        queryId: QUERY_IDS.SearchTimeline,
+      }),
+    });
+    const json = await resp.json();
+    const searchData = json?.data?.search_by_raw_query as SearchTimelineData['search_by_raw_query'] | undefined;
 
-  const tweets: TweetResult[] = [];
-  const users: UserResult[] = [];
+    const tweets: TweetResult[] = [];
+    const users: UserResult[] = [];
 
-  const instructions = data?.search_by_raw_query?.search_timeline?.timeline?.instructions;
-  if (instructions) {
-    for (const inst of instructions) {
-      if (inst.type === 'TimelineAddEntries') {
-        for (const entry of inst.entries || []) {
-          const tr = entry.content?.itemContent?.tweet_results?.result;
-          if (tr && tr.rest_id) {
-            tweets.push(tr);
-            if (tr.core?.user_results?.result) {
-              users.push(tr.core.user_results.result);
+    const instructions = searchData?.search_timeline?.timeline?.instructions;
+    if (instructions) {
+      for (const inst of instructions) {
+        if (inst.type === 'TimelineAddEntries') {
+          for (const entry of inst.entries || []) {
+            const tr = entry.content?.itemContent?.tweet_results?.result;
+            if (tr && tr.rest_id) {
+              tweets.push(tr);
+              if (tr.core?.user_results?.result) {
+                users.push(tr.core.user_results.result);
+              }
             }
           }
         }
       }
     }
-  }
 
-  return { tweets, includes: { users } };
+    return { tweets, includes: { users } };
+  } catch {
+    return { tweets: [], includes: { users: [] } };
+  }
 }
 
 // ─── TweetDetail ───────────────────────────────────────────
@@ -320,7 +407,7 @@ export async function postReply(
 
   try {
     const url = `${BASE}/${QUERY_IDS.CreateTweet}/CreateTweet`;
-    const resp = await fetch(url, {
+    const resp = await fetchWithProxy(url, {
       method: 'POST',
       headers: { ...headers(creds), 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -329,14 +416,23 @@ export async function postReply(
         queryId: QUERY_IDS.CreateTweet,
       }),
     });
-    const json = await resp.json();
-    const data = json?.data?.create_tweet as CreateTweetResponse | undefined;
+    const raw = await resp.text();
+    let json: any;
+    try { json = JSON.parse(raw); } catch { return { ok: false, err: `Invalid JSON response: ${raw.substring(0, 200)}` }; }
 
+    // 检查顶层 errors（权限/限流等）
+    if (json?.errors?.length > 0) {
+      const topErr = json.errors[0];
+      return { ok: false, err: topErr?.message || `API error code ${topErr?.code}` };
+    }
+
+    const data = json?.data?.create_tweet as CreateTweetResponse | undefined;
     if (data?.result?.rest_id) {
       return { ok: true, replyId: data.result.rest_id };
     }
+
     const errs = data?.result?.errors;
-    const msg = errs?.[0]?.message || `HTTP ${resp.status}`;
+    const msg = errs?.[0]?.message || `HTTP ${resp.status}: ${raw.substring(0, 200)}`;
     return { ok: false, err: msg };
   } catch (e: any) {
     return { ok: false, err: e.message || 'Network error' };
@@ -356,7 +452,7 @@ export async function deleteTweet(
 ): Promise<boolean> {
   try {
     const url = `${BASE}/${QUERY_IDS.DeleteTweet}/DeleteTweet`;
-    const resp = await fetch(url, {
+    const resp = await fetchWithProxy(url, {
       method: 'POST',
       headers: { ...headers(creds), 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -374,13 +470,17 @@ export async function deleteTweet(
 // ─── UserByScreenName ──────────────────────────────────────
 
 interface UserByScreenNameResponse {
-  result?: {
-    rest_id?: string;
-    legacy?: {
-      name: string;
-      screen_name: string;
-      description?: string;
-      followers_count: number;
+  user?: {
+    result?: {
+      rest_id?: string;
+      core?: {
+        screen_name: string;
+        name: string;
+      };
+      legacy?: {
+        description?: string;
+        followers_count: number;
+      };
     };
   };
 }
@@ -395,14 +495,17 @@ export async function getUserByUsername(
     creds, QUERY_IDS.UserByScreenName, 'UserByScreenName',
     { screen_name: screenName, withSafetyModeUserFields: true },
   );
-  if (resp?.result?.rest_id) {
+  const result = resp?.user?.result;
+  if (result?.rest_id) {
     return {
-      rest_id: resp.result.rest_id,
+      rest_id: result.rest_id,
+      core: {
+        name: result.core?.name || screenName,
+        screen_name: result.core?.screen_name || screenName,
+      },
       legacy: {
-        name: resp.result.legacy?.name || screenName,
-        screen_name: resp.result.legacy?.screen_name || screenName,
-        description: resp.result.legacy?.description,
-        followers_count: resp.result.legacy?.followers_count || 0,
+        description: result.legacy?.description,
+        followers_count: result.legacy?.followers_count || 0,
         friends_count: 0,
       },
     };

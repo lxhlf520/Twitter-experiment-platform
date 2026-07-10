@@ -74,18 +74,18 @@ function extractScreeningPost(tweet: TweetResult | null, author: UserResult | nu
   const rp = tweet.legacy?.retweet_count || 0;
   const lk = tweet.legacy?.favorite_count || 0;
   const postTime = new Date(tweet.legacy?.created_at || '').getTime();
-  const cutoff = Date.now() - 12 * 3600 * 1000;
+  const cutoff = Date.now() - 7 * 24 * 3600 * 1000; // TEST: 放宽到 7 天
   const isRetweet = !!tweet.legacy?.retweeted_status_result;
   const wordCount = (content || '').split(/\s+/).filter((w: string) => w.length > 0).length;
   const authorUid = author?.rest_id || tweet.core?.user_results?.result?.rest_id || '';
-  const authorName = author?.legacy?.name || author?.legacy?.screen_name || '';
+  const authorName = author?.core?.name || author?.core?.screen_name || '';
 
-  // Hard filtering
+  // Hard filtering (TEST: relaxed)
   if (!postTime || postTime < cutoff) return null;
   if (isRetweet) return null;
-  if (wordCount < 8) return null;
-  if (cc < 10 || cc > 500) return null;
-  if (followers >= 500_000) return null;
+  if (wordCount < 3) return null;
+  if (cc > 500) return null;
+  if (followers >= 5_000_000) return null;
   if (EXCLUDE_KW.some((kw) => content.toLowerCase().includes(kw.toLowerCase()))) return null;
 
   return {
@@ -131,10 +131,10 @@ export async function runCollectBatch(): Promise<{ experimentId: string; qualifi
   }
   console.log(`  当前池: ${qualified}/${TARGET_QUALIFIED}  批次: ${(exp.batch_count || 0) + 1}/${MAX_BATCHES}`);
 
-  // ── 用 Twitter API 搜索，收集 tweet IDs ──
+  // ── 用 Twitter API 搜索，直接用返回结果筛选（不再逐条调 getTweet）──
   const seen = new Set<string>(exp.seen_mids || []);
-  const batchTweetIds = new Set<string>();
-  const startTime = new Date(Date.now() - 12 * 3600 * 1000); // 12h window
+  const startTime = new Date(Date.now() - 7 * 24 * 3600 * 1000); // TEST: 7 天
+  let added = 0;
 
   outer: for (const kw of SEARCH_KEYWORDS) {
     for (let ai = 0; ai < accounts.length; ai++) {
@@ -144,49 +144,39 @@ export async function runCollectBatch(): Promise<{ experimentId: string; qualifi
           startTime,
         });
         for (const t of result.tweets) {
-          if (!seen.has(t.rest_id)) batchTweetIds.add(t.rest_id);
+          if (seen.has(t.rest_id)) continue;
+          seen.add(t.rest_id);
+
+          // 从搜索结果提取 author（user 信息已包含在 tweet.core.user_results 中）
+          const author = t.core?.user_results?.result || null;
+          const sp = extractScreeningPost(t, author);
+          if (sp) {
+            const before = await count(POOL, { experiment_id: experimentId, author_uid: sp.authorUid });
+            await upsert(POOL, { experiment_id: experimentId, author_uid: sp.authorUid }, {
+              experiment_id: experimentId,
+              post_id: sp.postId,
+              post_url: sp.postUrl,
+              content: sp.content,
+              author_uid: sp.authorUid,
+              author_name: sp.authorName,
+              followers: sp.followers,
+              comments_count: sp.commentsCount,
+              reposts_count: sp.repostsCount,
+              likes_count: sp.likesCount,
+              published_at: sp.publishedAt,
+            });
+            if (before === 0) added++;
+            qualified = await count(POOL, { experiment_id: experimentId });
+            if (qualified >= TARGET_QUALIFIED) {
+              console.log(`  合格已达标: ${qualified}`);
+              break outer;
+            }
+          }
         }
       } catch {
         /* single failure skip */
       }
       await sleep(1000 + Math.random() * 1500);
-      if (batchTweetIds.size >= CANDIDATE_BATCH) break outer;
-    }
-  }
-
-  const tweetIds = [...batchTweetIds];
-  console.log(`\n本批候选（去重历史后）: ${tweetIds.length} 个 tweet`);
-
-  // ── 逐条获取详情并筛选 ──
-  let added = 0;
-  for (let i = 0; i < tweetIds.length; i++) {
-    const tid = tweetIds[i];
-    seen.add(tid);
-    const { tweet, author } = await getTweet(getCredentials(accounts[i % accounts.length]), tid);
-    const sp = extractScreeningPost(tweet, author);
-    if (sp) {
-      const before = await count(POOL, { experiment_id: experimentId, author_uid: sp.authorUid });
-      await upsert(POOL, { experiment_id: experimentId, author_uid: sp.authorUid }, {
-        experiment_id: experimentId,
-        post_id: sp.postId,
-        post_url: sp.postUrl,
-        content: sp.content,
-        author_uid: sp.authorUid,
-        author_name: sp.authorName,
-        followers: sp.followers,
-        comments_count: sp.commentsCount,
-        reposts_count: sp.repostsCount,
-        likes_count: sp.likesCount,
-        published_at: sp.publishedAt,
-      });
-      if (before === 0) added++;
-    }
-    await sleep(300 + Math.random() * 600);
-    qualified = await count(POOL, { experiment_id: experimentId });
-    if ((i + 1) % 50 === 0) console.log(`  进度: ${i + 1}/${tweetIds.length}（池累计 ${qualified}）`);
-    if (qualified >= TARGET_QUALIFIED) {
-      console.log(`  合格已达标: ${qualified}（本批扫描 ${i + 1} 条）`);
-      break;
     }
   }
 

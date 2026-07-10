@@ -14,6 +14,7 @@
     "test-entry": "tsx src/jobs/test-entry.ts"
   },
   "dependencies": {
+    "https-proxy-agent": "^9.1.0",
     "mongodb": "^6.15.0",
     "next": "16.2.9",
     "react": "19.2.4",
@@ -36,6 +37,8 @@
     "typescript": "^5"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   }
 }

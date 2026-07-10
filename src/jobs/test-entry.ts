@@ -16,10 +16,10 @@
  *   - 候选目标 1000 条 tweet（实际合格数取决于筛选通过率）
  */
 
-process.env.CANDIDATE_BATCH = '1000';
+process.env.CANDIDATE_BATCH = '50';
 process.env.TARGET_QUALIFIED = '9';
 process.env.EXPERIMENT_POSTS = '9';
-process.env.MAX_PAGES = '5';
+process.env.MAX_PAGES = '2';
 
 async function main() {
   console.log('='.repeat(65));

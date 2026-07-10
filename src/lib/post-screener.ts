@@ -69,7 +69,7 @@ function containsExcludeKeywords(text: string, keywords: string[]): boolean {
  */
 function filterLayer2_aiProfile(items: { tweet: TweetResult; author: UserResult | null; sp: ScreeningPost }[]): { tweet: TweetResult; author: UserResult | null; sp: ScreeningPost }[] {
   return items.filter(({ author }) => {
-    const userName = (author?.legacy?.name || '').toLowerCase();
+    const userName = (author?.core?.name || '').toLowerCase();
     const userDesc = (author?.legacy?.description || '').toLowerCase();
     return !AI_IDENTITY_KEYWORDS.some(
       (kw) => userName.includes(kw.toLowerCase()) || userDesc.includes(kw.toLowerCase()),
@@ -99,7 +99,7 @@ function extractScreeningPost(tweet: TweetResult, author: UserResult | null): Sc
     postUrl: `https://twitter.com/i/status/${tweet.rest_id}`,
     content: tweet.legacy?.full_text || '',
     authorUid: author?.rest_id || tweet.core?.user_results?.result?.rest_id || '',
-    authorName: author?.legacy?.name || author?.legacy?.screen_name || '',
+    authorName: author?.core?.name || author?.core?.screen_name || '',
     followers: author?.legacy?.followers_count || 0,
     commentsCount: tweet.legacy?.reply_count || 0,
     repostsCount: tweet.legacy?.retweet_count || 0,
