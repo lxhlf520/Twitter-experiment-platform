@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     // 查询账号
     const account = await maybeOne<{
       id: string; auth_token: string; ct0: string; twitter_handle: string;
-    }>('accounts', { id, user_id: auth.id });
+    }>('accounts', { id });
 
     if (!account) {
       return NextResponse.json({ error: 'Account not found' }, { status: 404 });
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      await updateOne('accounts', { id, user_id: auth.id }, updates);
+      await updateOne('accounts', { id }, updates);
     } catch {
       // DB 更新失败不影响返回结果
     }
