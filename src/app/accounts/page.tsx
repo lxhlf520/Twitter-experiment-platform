@@ -34,6 +34,10 @@ export default function AccountsPage() {
   const [formCt0, setFormCt0] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // Test state
+  const [testing, setTesting] = useState<Set<number>>(new Set());
+  const [testResults, setTestResults] = useState<Map<number, { ok: boolean; search_ok?: boolean; comment_ok?: boolean; error?: string }>>(new Map());
+
   const fetchAccounts = useCallback(async () => {
     try {
       const resp = await fetch('/api/accounts', {
@@ -118,6 +122,44 @@ export default function AccountsPage() {
       body: JSON.stringify({ id: acc.id, can_comment: newVal }),
     });
     fetchAccounts();
+  };
+
+  const testAccount = async (acc: TwitterAccount) => {
+    setTesting(prev => new Set(prev).add(acc.id));
+    setTestResults(prev => {
+      const next = new Map(prev);
+      next.delete(acc.id);
+      return next;
+    });
+    try {
+      const resp = await fetch('/api/accounts/test', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ id: acc.id }),
+      });
+      const data = await resp.json();
+      setTestResults(prev => new Map(prev).set(acc.id, {
+        ok: data.success && data.search_ok,
+        search_ok: data.search_ok,
+        comment_ok: data.comment_ok,
+        error: data.error,
+      }));
+      // 刷新列表以展示更新后的状态
+      fetchAccounts();
+    } catch (e: any) {
+      setTestResults(prev => new Map(prev).set(acc.id, {
+        ok: false,
+        error: e.message || 'Network error',
+      }));
+    }
+    setTesting(prev => {
+      const next = new Set(prev);
+      next.delete(acc.id);
+      return next;
+    });
   };
 
   const statusColor = (status: string) => {
@@ -207,12 +249,33 @@ export default function AccountsPage() {
                   {acc.comment_ban_reason && <span className="text-red-400 ml-2">({acc.comment_ban_reason})</span>}
                 </div>
               )}
-              <button
-                onClick={() => deleteAccount(acc.id)}
-                className="text-xs text-red-400 hover:text-red-600"
-              >
-                Delete
-              </button>
+              <div className="flex items-center gap-3 mt-2">
+                <button
+                  onClick={() => testAccount(acc)}
+                  disabled={testing.has(acc.id)}
+                  className="text-xs px-3 py-1 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 disabled:opacity-50 disabled:cursor-wait transition"
+                >
+                  {testing.has(acc.id) ? 'Testing...' : '🔍 Test'}
+                </button>
+                <button
+                  onClick={() => deleteAccount(acc.id)}
+                  className="text-xs text-red-400 hover:text-red-600"
+                >
+                  Delete
+                </button>
+              </div>
+              {testResults.has(acc.id) && (() => {
+                const r = testResults.get(acc.id)!;
+                return (
+                  <div className={`mt-2 text-xs rounded px-2 py-1 ${r.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                    {r.ok ? (
+                      <span>✅ Search OK{typeof r.comment_ok !== 'undefined' ? (r.comment_ok ? ' | Comment OK' : ' | ❌ Comment failed') : ''}</span>
+                    ) : (
+                      <span>❌ {r.error || 'Test failed'}</span>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           ))}
         </div>

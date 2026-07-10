@@ -98,6 +98,15 @@ function headers(creds: TwitterCredentials): Record<string, string> {
     'x-twitter-auth-type': 'OAuth2Session',
     'x-twitter-client-language': 'en',
     'Content-Type': 'application/json',
+    // 模拟浏览器 headers，避免被当作 bot 静默拒绝
+    'Origin': 'https://x.com',
+    'Referer': 'https://x.com/home',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    'sec-ch-ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+    'sec-ch-ua-mobile': '?0',
+    'sec-ch-ua-platform': '"Windows"',
+    'Accept': '*/*',
+    'Accept-Language': 'en-US,en;q=0.9',
   };
 }
 
@@ -426,12 +435,20 @@ export async function postReply(
       return { ok: false, err: topErr?.message || `API error code ${topErr?.code}` };
     }
 
-    const data = json?.data?.create_tweet as CreateTweetResponse | undefined;
-    if (data?.result?.rest_id) {
-      return { ok: true, replyId: data.result.rest_id };
+    // 新版响应结构: data.create_tweet.tweet_results.result.rest_id
+    const tweetResult = json?.data?.create_tweet?.tweet_results?.result;
+    if (tweetResult?.rest_id) {
+      return { ok: true, replyId: tweetResult.rest_id };
     }
 
-    const errs = data?.result?.errors;
+    // 兼容旧版: data.create_tweet.result.rest_id
+    const legacyResult = json?.data?.create_tweet?.result;
+    if (legacyResult?.rest_id) {
+      return { ok: true, replyId: legacyResult.rest_id };
+    }
+
+    // 检查 result.errors
+    const errs = legacyResult?.errors;
     const msg = errs?.[0]?.message || `HTTP ${resp.status}: ${raw.substring(0, 200)}`;
     return { ok: false, err: msg };
   } catch (e: any) {
