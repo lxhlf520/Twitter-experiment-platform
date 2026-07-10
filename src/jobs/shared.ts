@@ -143,13 +143,13 @@ export function nyDateStr(): string {
 
 /** 读取所有 active 账号 */
 export async function getActiveAccounts(): Promise<TwitterAccount[]> {
-  const { rows } = await query<TwitterAccount>('twitter_accounts', { status: 'active' });
+  const { rows } = await query<TwitterAccount>('accounts', { status: 'active' });
   return rows;
 }
 
 /** 读取可评论账号：status=active 且 未被标记禁评（can_comment !== false） */
 export async function getCommentableAccounts(): Promise<TwitterAccount[]> {
-  const { rows } = await query<TwitterAccount>('twitter_accounts', {
+  const { rows } = await query<TwitterAccount>('accounts', {
     status: 'active',
     can_comment: { $ne: false },
   });

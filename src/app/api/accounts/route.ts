@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
   if (auth instanceof Response) return auth;
   try {
     const { rows } = await query(
-      'twitter_accounts',
+      'accounts',
       { user_id: auth.id },
       { sort: { created_at: -1 } },
     );
@@ -33,12 +33,12 @@ export async function POST(request: NextRequest) {
 
     if (twitter_handle) {
       const existing = await maybeOne(
-        'twitter_accounts',
+        'accounts',
         { user_id: auth.id, twitter_handle },
       );
       if (existing) {
         account = await updateOne(
-          'twitter_accounts',
+          'accounts',
           { id: existing.id },
           {
             auth_token, ct0,
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    account = await insert('twitter_accounts', {
+    account = await insert('accounts', {
       user_id: auth.id,
       twitter_handle,
       auth_token,
@@ -74,7 +74,7 @@ export async function DELETE(request: NextRequest) {
   try {
     const { id } = await request.json();
     if (!id) return NextResponse.json({ error: 'Missing account ID' }, { status: 400 });
-    await deleteMany('twitter_accounts', { id, user_id: auth.id });
+    await deleteMany('accounts', { id, user_id: auth.id });
     return NextResponse.json({ success: true });
   } catch (err) {
     return NextResponse.json({ error: `Failed to delete account: ${err}` }, { status: 500 });
@@ -100,7 +100,7 @@ export async function PATCH(request: NextRequest) {
     if (can_comment !== undefined) sets.can_comment = can_comment;
 
     const account = await updateOne(
-      'twitter_accounts',
+      'accounts',
       { id, user_id: auth.id },
       sets,
     );
