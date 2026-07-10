@@ -78,18 +78,30 @@ export const SEARCH_KEYWORDS = [
   'breakfast', 'lunch', 'dinner', 'pet', 'cat', 'dog', 'reading', 'music',
 ];
 
-// ─── 关键词黑名单（英文敏感/营销/引流）─────────────────────
+// ─── 关键词黑名单（对标微博规则：广告/暴力/色情/政治/营销/引流）─────
 export const EXCLUDE_KW = [
-  // Sensitive/political
-  'giveaway', 'contest', 'win free', 'discount code', 'promo code', 'sale now',
-  // Spam/ads
+  // ── 广告/营销 ──
+  'giveaway', 'contest', 'win free', 'discount', 'promo code', 'sale now',
   'buy now', 'click here', 'subscribe now', 'follow me', 'dm me',
-  // Financial/scam
+  'free shipping', 'limited offer', 'best deal', 'shop now',
+  // ── 金融诈骗 ──
   'crypto', 'bitcoin', 'nft drop', 'investment opportunity', 'earn money',
-  'get rich', 'forex', 'trading signal',
-  // Medical/legal
+  'get rich', 'forex', 'trading signal', 'gambling', 'casino',
+  'lottery', 'sweepstakes', 'airdrop',
+  // ── 医疗法律 ──
   'medical advice', 'legal advice',
-  // Growth hacking
+  // ── 暴力武器 ──
+  'kill you', 'murder', 'blood', 'weapon', 'shooting', 'gun down',
+  'bomb', 'terror', 'massacre', 'behead',
+  // ── 色情成人 ──
+  'nsfw', 'porn', 'onlyfans', 'xxx', 'escort', 'adult content',
+  'nude', 'explicit', 'sexual content',
+  // ── 自杀自残 ──
+  'suicide', 'kill myself', 'self harm', 'end my life',
+  // ── 政治煽动 ──
+  'election fraud', 'rigged election', 'vote for me', 'political campaign',
+  'protest now', 'rally today',
+  // ── 增长黑客 ──
   'follow back', 'gain followers', 'growth hack',
 ];
 

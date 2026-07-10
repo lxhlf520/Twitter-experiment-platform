@@ -22,15 +22,27 @@ export interface ScreeningCriteria {
 }
 
 const DEFAULT_EXCLUDE_KEYWORDS = [
-  // Sensitive/political
-  'giveaway', 'contest', 'win', 'free', 'discount', 'promo', 'sale', 'deal',
-  // Spam/ads
-  'buy now', 'click here', 'subscribe', 'follow me', 'dm me', 'dm for',
-  // Financial/scam
+  // ── 广告/营销 ──
+  'giveaway', 'contest', 'win free', 'discount', 'promo code', 'sale now',
+  'buy now', 'click here', 'subscribe now', 'follow me', 'dm me', 'dm for',
+  'free shipping', 'limited offer', 'best deal', 'shop now',
+  // ── 金融/诈骗 ──
   'crypto', 'bitcoin', 'nft', 'investment', 'earn money', 'make money',
-  'get rich', 'forex', 'trading signal',
-  // Medical/legal
+  'get rich', 'forex', 'trading signal', 'gambling', 'bet now', 'casino',
+  'lottery', 'sweepstakes', 'airdrop',
+  // ── 医疗/法律 ──
   'medical advice', 'legal advice',
+  // ── 暴力/武器 ──
+  'kill you', 'murder', 'blood', 'weapon', 'shooting', 'gun down',
+  'bomb', 'terror', 'massacre', 'behead',
+  // ── 色情/成人 ──
+  'nsfw', 'porn', 'onlyfans', 'xxx', 'escort', 'adult content',
+  'nude', 'explicit', 'sexual content',
+  // ── 自杀/自残 ──
+  'suicide', 'kill myself', 'self harm', 'end my life',
+  // ── 政治煽动 ──
+  'election fraud', 'rigged election', 'vote for me', 'political campaign',
+  'protest now', 'rally today',
 ];
 
 const AI_IDENTITY_KEYWORDS = ['ai', 'bot', 'chatgpt', 'gpt', 'artificial intelligence', 'ai assistant'];
@@ -50,12 +62,43 @@ function isPublic(_tweet: TweetResult): boolean {
 }
 
 /**
- * 检查用户是否为普通个人账号（排除官方/机构账号）
+ * 检查用户是否为普通个人账号（排除官方/机构/组织号）
+ * 对标微博 vt > 0 规则：排除所有认证类型（政府/媒体/企业/机构等）
  */
 function isNormalUser(_tweet: TweetResult, author: UserResult | null): boolean {
-  if (author?.legacy?.verified && (author?.legacy?.followers_count || 0) < 100) {
-    return false;
-  }
+  if (!author) return true;
+  const userName = (author.core?.name || '').toLowerCase();
+  const userScreenName = (author.core?.screen_name || '').toLowerCase();
+  const userDesc = (author.legacy?.description || '').toLowerCase();
+  const followers = author.legacy?.followers_count || 0;
+  const verified = author.legacy?.verified || false;
+
+  // 组织/机构关键词（名称或简介匹配任一即排除）
+  const orgKeywords = [
+    // 政府/官方
+    'official', 'government', 'gov', 'parliament', 'congress', 'senate',
+    'ministry', 'department', 'agency', 'bureau', 'authority',
+    'police', 'military', 'army', 'navy', 'air force',
+    'mayor', 'governor', 'president', 'prime minister',
+    // 新闻/媒体
+    'news', 'media', 'press', 'journal', 'magazine',
+    'broadcast', 'network news', 'channel news', 'anchor', 'reporter',
+    'daily news', 'times news', 'chronicle', 'gazette', 'herald', 'tribune',
+    // 企业/商业
+    'company', ' inc ', ' llc ', 'ltd', 'corporation', 'enterprise', 'holdings',
+    'official store', 'customer service', 'support team', 'help desk',
+    // 组织/机构
+    'foundation', 'institute', 'association', 'society',
+    'church', 'charity', 'ngo', 'nonprofit', 'university', 'college',
+  ];
+
+  const nameAndBio = `${userName} ${userScreenName} ${userDesc}`;
+  const isOrg = orgKeywords.some((kw) => nameAndBio.includes(kw));
+  if (isOrg) return false;
+
+  // 认证账号 + 高粉丝 → 疑似机构/名人 → 排除
+  if (verified && followers >= 1_000_000) return false;
+
   return true;
 }
 
