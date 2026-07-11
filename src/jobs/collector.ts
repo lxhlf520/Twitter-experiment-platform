@@ -88,6 +88,10 @@ function extractScreeningPost(tweet: TweetResult | null, author: UserResult | nu
   if (followers >= 5_000_000) return null;
   if (EXCLUDE_KW.some((kw) => content.toLowerCase().includes(kw.toLowerCase()))) return null;
 
+  // 只采集英文推文
+  const lang = tweet.legacy?.lang;
+  if (lang && lang !== 'en') return null;
+
   return {
     postId: tweet.rest_id,
     postUrl: `https://twitter.com/i/status/${tweet.rest_id}`,

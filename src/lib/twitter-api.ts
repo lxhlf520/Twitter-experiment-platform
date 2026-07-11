@@ -174,6 +174,7 @@ export interface TweetResult {
     retweeted_status_result?: unknown;
     in_reply_to_status_id_str?: string;
     conversation_id_str?: string;
+    lang?: string;
   };
   core?: {
     user_results?: {
