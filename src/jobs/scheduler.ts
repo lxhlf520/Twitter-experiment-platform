@@ -17,6 +17,7 @@ import { runCollectBatch, finalizeExperiment } from './collector';
 import { runDailyComment } from './commenter';
 import { runMonitorTick } from './monitor';
 import { runCommentPermissionCheck } from './checker';
+import { runAnalyzer } from './analyzer';
 import { closeDb } from '../lib/db';
 import { COLLECT_HOURS, ts, getNYDate, nyDateStr } from './shared';
 
@@ -24,11 +25,13 @@ const COMMENT_HOUR = 20;  // 纽约时间 20:00 发评论
 const CHECK_HOUR = 19;    // 纽约时间 19:30 权限检测
 const CHECK_MINUTE = 30;
 const MONITOR_INTERVAL_MIN = 30;
+const ANALYZER_INTERVAL_MIN = 120; // 每 2 小时采集评论数据
 
 let busy = false;
 const firedHours = new Map<string, Set<number>>();
 let lastMonitorMinute = -1;
 let checkedCommentPermToday = '';
+let lastAnalyzerMinute = -1;
 
 async function guarded(name: string, fn: () => Promise<unknown>): Promise<void> {
   if (busy) {
@@ -92,6 +95,12 @@ async function heartbeat(): Promise<void> {
   if (totalMin % MONITOR_INTERVAL_MIN === 0 && totalMin !== lastMonitorMinute) {
     lastMonitorMinute = totalMin;
     await guarded('监控tick', runMonitorTick);
+  }
+
+  // 每 2 小时采集评论数据
+  if (totalMin % ANALYZER_INTERVAL_MIN === 0 && totalMin !== lastAnalyzerMinute) {
+    lastAnalyzerMinute = totalMin;
+    await guarded('评论数据采集', runAnalyzer);
   }
 }
 

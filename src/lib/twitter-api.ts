@@ -549,3 +549,104 @@ export async function searchReplies(
   });
   return tweets.filter((t) => t.rest_id !== tweetId);
 }
+
+// ─── 原始数据接口（用于溯源表 post_comment_meta / post_user_meta）───
+
+/** 评论条目（从 TweetDetail 的 threaded_conversation 提取） */
+export interface CommentEntry {
+  comment_id: string;
+  parent_comment_id: string | null; // null=对帖子直接评论
+  post_id: string; // 所属帖子 ID
+  author_uid: string;
+  author_name: string;
+  content: string;
+  likes_count: number;
+  created_at: string;
+  author_raw?: unknown; // 原始用户数据（用于 post_user_meta）
+}
+
+/** 获取 TweetDetail 原始响应（用于 post_comment_meta 溯源） */
+export async function getTweetDetailRaw(
+  creds: TwitterCredentials,
+  tweetId: string,
+): Promise<{ raw: unknown; entries: CommentEntry[] } | null> {
+  try {
+    const variables = {
+      focalTweetId: tweetId,
+      with_rux_injections: false,
+      includePromotedContent: true,
+      withCommunity: true,
+      withQuickPromoteEligibilityTweetFields: true,
+      withBirdwatchNotes: false,
+      withVoice: true,
+      withV2Timeline: true,
+    };
+
+    const url = `${BASE}/${QUERY_IDS.TweetDetail}/TweetDetail`;
+    const qs = `variables=${encodeURIComponent(JSON.stringify(variables))}&features=${encodeURIComponent(JSON.stringify(TWEET_DETAIL_FEATURES))}`;
+    const resp = await fetchWithProxy(`${url}?${qs}`, {
+      headers: {
+        ...headers(creds),
+        'Accept': '*/*',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+    });
+
+    const raw = await resp.json();
+    const instructions = (raw as any)?.data?.threaded_conversation_with_injections_v2?.instructions;
+    if (!instructions) return { raw, entries: [] };
+
+    // 提取所有评论条目及其父子关系
+    const entries: CommentEntry[] = [];
+
+    for (const inst of instructions) {
+      for (const entry of inst.entries || []) {
+        // 顶层条目：可能是主帖或直接评论
+        const tr = entry.content?.itemContent?.tweet_results?.result;
+        if (tr?.rest_id) {
+          const user = tr.core?.user_results?.result;
+          const isMainTweet = tr.rest_id === tweetId;
+          if (!isMainTweet) {
+            entries.push({
+              comment_id: tr.rest_id,
+              parent_comment_id: null,
+              post_id: tweetId,
+              author_uid: user?.rest_id || '',
+              author_name: user?.legacy?.screen_name || user?.core?.screen_name || '',
+              content: tr.legacy?.full_text || '',
+              likes_count: tr.legacy?.favorite_count || 0,
+              created_at: tr.legacy?.created_at || '',
+              author_raw: user || null,
+            });
+          }
+        }
+
+        // 嵌套回复：entry.content.items[] 中是子评论
+        const items = entry.content?.items;
+        if (items) {
+          for (const item of items) {
+            const subTr = item.item?.itemContent?.tweet_results?.result;
+            if (subTr?.rest_id) {
+              const subUser = subTr.core?.user_results?.result;
+              entries.push({
+                comment_id: subTr.rest_id,
+                parent_comment_id: subTr.legacy?.in_reply_to_status_id_str || null,
+                post_id: tweetId,
+                author_uid: subUser?.rest_id || '',
+                author_name: subUser?.legacy?.screen_name || subUser?.core?.screen_name || '',
+                content: subTr.legacy?.full_text || '',
+                likes_count: subTr.legacy?.favorite_count || 0,
+                created_at: subTr.legacy?.created_at || '',
+                author_raw: subUser || null,
+              });
+            }
+          }
+        }
+      }
+    }
+
+    return { raw, entries };
+  } catch {
+    return null;
+  }
+}
