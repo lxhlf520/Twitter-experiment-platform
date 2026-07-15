@@ -61,15 +61,13 @@ async function main() {
   const existingTemplates = await count('comment_templates');
   if (existingTemplates === 0) {
     const defaults = [
-      { post_group: 'low', content: 'Well written, thanks for sharing', is_active: true, sort_order: 1 },
-      { post_group: 'low', content: 'Nice, keep it up', is_active: true, sort_order: 2 },
-      { post_group: 'low', content: 'That makes sense', is_active: true, sort_order: 3 },
-      { post_group: 'high', content: 'This is a brilliant point! Bookmarked, looking forward to more content like this', is_active: true, sort_order: 1 },
-      { post_group: 'high', content: 'Perfectly summarized, learned a lot! Shared with friends', is_active: true, sort_order: 2 },
-      { post_group: 'high', content: 'Really inspiring, very detailed, thumbs up!', is_active: true, sort_order: 3 },
+      { post_group: 'low', content: '路过看到这条。', is_active: true, sort_order: 1 },
+      { post_group: 'low', content: '刷到这条了。', is_active: true, sort_order: 2 },
+      { post_group: 'high', content: 'AI生成评论：路过看到这条。', is_active: true, sort_order: 1 },
+      { post_group: 'high', content: 'AI生成评论：刷到这条了。', is_active: true, sort_order: 2 },
     ];
     for (const t of defaults) await insert('comment_templates', t);
-    console.log(`  Initialized ${defaults.length} default English comment templates`);
+    console.log(`  Initialized ${defaults.length} default comment templates`);
   } else {
     console.log(`  Comment templates already: ${existingTemplates}`);
   }
