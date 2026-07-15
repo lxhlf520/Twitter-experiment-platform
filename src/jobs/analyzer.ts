@@ -1,10 +1,11 @@
 /**
  * 正式实验 - 评论数据采集与分析（Twitter 适配版）
  * ============================================================================
- * 在评论发送后/监控期间采集评论数据，产出三张结果表：
- *   1. comment_snapshots   - 结构化评论快照（支持构建评论树）
- *   2. post_comment_meta   - 90 篇实验帖的全部评论 API 原始响应（溯源）
- *   3. post_user_meta      - 评论用户信息 API 原始响应（溯源）
+ * 产出四张溯源表（4 张结果表均来源于此）：
+ *   1. post_detail          - 帖子详情原始 API 响应（溯源）
+ *   2. post_comment_meta    - 全部评论 API 原始响应（溯源）
+ *   3. post_user_meta       - 评论用户信息 API 原始响应（溯源）
+ *   4. comment_snapshots    - 结构化评论快照（支持构建评论树）
  *
  * 直跑调试：npx tsx src/jobs/analyzer.ts [experimentId]
  */
@@ -42,7 +43,20 @@ async function collectPostComments(
   const detail = await getTweetDetailRaw(creds, post.post_id);
   if (!detail) return { comments: 0, users: 0 };
 
-  // ── post_comment_meta：保存原始 API 响应 ──
+  // ── post_detail：保存原始帖子详情 ──
+  await upsert(
+    'post_detail',
+    { experiment_id: experimentId, post_id: post.id },
+    {
+      experiment_id: experimentId,
+      post_id: post.id,
+      tweet_id: post.post_id,
+      raw_response: JSON.stringify(detail.raw),
+      captured_at: now(),
+    },
+  );
+
+  // ── post_comment_meta：保存原始 API 响应（含评论 conversation）──
   await upsert(
     'post_comment_meta',
     { experiment_id: experimentId, post_id: post.id },
