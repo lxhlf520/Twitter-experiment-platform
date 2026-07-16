@@ -19,6 +19,7 @@ import { runMonitorTick } from './monitor';
 import { runCommentPermissionCheck } from './checker';
 import { runAnalyzer } from './analyzer';
 import { runStartupMigration } from '../lib/startup-migration';
+import { ensureTemplates } from '../lib/seed-templates';
 import { closeDb } from '../lib/db';
 import { COLLECT_HOURS, ts, getNYDate, nyDateStr } from './shared';
 
@@ -119,6 +120,12 @@ function main(): void {
     if (!skipped) {
       console.log(`[启动迁移] 帖子迁移 ${postsMigrated} 条, post_group 回填 ${postGroupBackfilled} 条`);
     }
+  });
+
+  // 启动时同步评论模板
+  guarded('模板同步', async () => {
+    const { created, existing } = await ensureTemplates();
+    console.log(`[模板同步] 新增 ${created} 条, 已有 ${existing} 条`);
   });
 
   setInterval(() => {
