@@ -72,7 +72,13 @@
 | `comment_template` | ObjectId | ✅ | 关联 `comment_templates._id` |
 | `comment_content` | string | ✅ | 实际发送的评论内容 |
 | `status` | string | ✅ | `pending` → `sent` → `failed` |
-| `error` | string | | 失败原因（仅 `status = failed` 时有值） |
+| `comment_id` | string | | Twitter reply ID（发送成功后写入） |
+| `sent_at` | string | | 评论发送时间 |
+| `account_nickname` | string | | 实际发出评论的账号昵称（sent 时写入） |
+| `account_id` | string | | 实际发出评论的 Twitter handle（sent 时写入） |
+| `error` | string | | 失败原因（仅 status = failed） |
+
+**注意**: `account_nickname` 和 `account_id` 仅在 `status=sent` 时有值，用于追踪哪个账号成功发出了回复。
 
 ---
 

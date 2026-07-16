@@ -161,11 +161,14 @@ export async function runDailyComment(expIdArg?: string): Promise<{ sent: number
     ai = (r.usedIdx + 1) % commentAccounts.length;
 
     if (r.ok) {
+      const usedAccount = commentAccounts[r.usedIdx];
       await updateOne('intervention_logs', { id: log.id }, {
         status: 'sent', comment_id: r.replyId, sent_at: now(),
+        account_nickname: usedAccount.nickname,
+        account_id: usedAccount.twitter_handle,
       });
       sent++;
-      console.log(`    ✅ 成功 replyId=${r.replyId}`);
+      console.log(`    ✅ 成功 replyId=${r.replyId} (${usedAccount.nickname})`);
     } else {
       await updateOne('intervention_logs', { id: log.id }, { status: 'failed', error: r.err });
       failed++;
@@ -191,8 +194,11 @@ export async function runDailyComment(expIdArg?: string): Promise<{ sent: number
             const sr = await tryAllAccounts(spare.post_id, log.comment_content, commentAccounts, ai);
             ai = (sr.usedIdx + 1) % commentAccounts.length;
             if (sr.ok) {
+              const usedAccount2 = commentAccounts[sr.usedIdx];
               await updateOne('intervention_logs', { id: spareLog.id }, {
                 status: 'sent', comment_id: sr.replyId, sent_at: now(),
+                account_nickname: usedAccount2.nickname,
+                account_id: usedAccount2.twitter_handle,
               });
               sent++;
               failed--;
