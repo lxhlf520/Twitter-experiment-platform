@@ -16,10 +16,10 @@ interface TemplateRow {
 
 /** 默认 4 条评论模板（low 组 2 条 + high 组 2 条，high 组带 AI 标记前缀） */
 const DEFAULT_TEMPLATES: TemplateRow[] = [
-  { post_group: 'low', content: '路过看到这条。', sort_order: 1, is_active: true },
-  { post_group: 'low', content: '刷到这条了。', sort_order: 2, is_active: true },
-  { post_group: 'high', content: 'AI生成评论：路过看到这条。', sort_order: 3, is_active: true },
-  { post_group: 'high', content: 'AI生成评论：刷到这条了。', sort_order: 4, is_active: true },
+  { post_group: 'low', content: 'just passing by, saw this.', sort_order: 1, is_active: true },
+  { post_group: 'low', content: 'came across this post.', sort_order: 2, is_active: true },
+  { post_group: 'high', content: 'AI-generated comment: just passing by, saw this.', sort_order: 3, is_active: true },
+  { post_group: 'high', content: 'AI-generated comment: came across this post.', sort_order: 4, is_active: true },
 ];
 
 /**
