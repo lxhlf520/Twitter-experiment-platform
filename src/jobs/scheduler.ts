@@ -18,6 +18,7 @@ import { runDailyComment } from './commenter';
 import { runMonitorTick } from './monitor';
 import { runCommentPermissionCheck } from './checker';
 import { runAnalyzer } from './analyzer';
+import { runStartupMigration } from '../lib/startup-migration';
 import { closeDb } from '../lib/db';
 import { COLLECT_HOURS, ts, getNYDate, nyDateStr } from './shared';
 
@@ -109,7 +110,16 @@ function main(): void {
   console.log(`Twitter 正式实验调度器启动（纽约时间） [${ts()}]`);
   console.log(`  采集批次: ${COLLECT_HOURS.join('/')}点 | ${CHECK_HOUR}:${CHECK_MINUTE} 权限检测 | ${COMMENT_HOUR}点批后选帖+评论 | 每${MONITOR_INTERVAL_MIN}min 监控`);
   console.log(`  当前纽约时间: ${nyDateStr()} ${String(getNYDate().getHours()).padStart(2,'0')}:${String(getNYDate().getMinutes()).padStart(2,'0')}`);
+  console.log(`  数据迁移: 启动时自动`);
   console.log(`${'='.repeat(60)}`);
+
+  // 启动时：数据迁移（PREFIX 适配 + post_group 回填）
+  guarded('启动数据迁移', async () => {
+    const { postsMigrated, postGroupBackfilled, skipped } = await runStartupMigration();
+    if (!skipped) {
+      console.log(`[启动迁移] 帖子迁移 ${postsMigrated} 条, post_group 回填 ${postGroupBackfilled} 条`);
+    }
+  });
 
   setInterval(() => {
     heartbeat().catch((e) => console.error('[调度] 心跳异常:', e));
