@@ -84,7 +84,7 @@ function extractScreeningPost(tweet: TweetResult | null, author: UserResult | nu
   if (!postTime || postTime < cutoff) return null;
   if (isRetweet) return null;
   if (wordCount < 3) return null;
-  if (cc > 500) return null;
+  if (cc < 10 || cc > 500) return null;
   if (followers >= 5_000_000) return null;
   if (EXCLUDE_KW.some((kw) => content.toLowerCase().includes(kw.toLowerCase()))) return null;
 
@@ -276,6 +276,7 @@ export async function finalizeExperiment(): Promise<{ experimentId: string } | n
       await insert('intervention_logs', {
         experiment_id: experimentId,
         post_id: String(post.id),
+        post_url: p.postUrl,
         post_group: item.group,
         comment_template: (item as any).templateId ? String((item as any).templateId) : null,
         comment_content: item.commentContent,
