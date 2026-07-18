@@ -79,30 +79,39 @@ async function heartbeat(): Promise<void> {
   const minute = ny.getMinutes();
 
   if (hour === CHECK_HOUR && minute === CHECK_MINUTE && today !== checkedCommentPermToday) {
-    checkedCommentPermToday = today;
-    await guarded(`${CHECK_HOUR}:${CHECK_MINUTE} 评论权限检测`, runCommentPermissionCheck);
+    await guarded(`${CHECK_HOUR}:${CHECK_MINUTE} 评论权限检测`, async () => {
+      checkedCommentPermToday = today;
+      await runCommentPermissionCheck();
+    });
     return;
   }
 
-  if (minute < MONITOR_INTERVAL_MIN && COLLECT_HOURS.includes(hour) && claimHour(today, hour)) {
-    if (hour === COMMENT_HOUR) {
-      await guarded(`${COMMENT_HOUR}点采集+选帖+评论`, runCommentPipeline);
-    } else {
-      await guarded(`${hour}点采集批次`, runCollectBatch);
-    }
+  if (minute < MONITOR_INTERVAL_MIN && COLLECT_HOURS.includes(hour)) {
+    await guarded(`${hour}点采集批次`, async () => {
+      if (!claimHour(today, hour)) return;
+      if (hour === COMMENT_HOUR) {
+        await runCommentPipeline();
+      } else {
+        await runCollectBatch();
+      }
+    });
     return;
   }
 
   const totalMin = Math.floor(ny.getTime() / 60000);
   if (totalMin % MONITOR_INTERVAL_MIN === 0 && totalMin !== lastMonitorMinute) {
-    lastMonitorMinute = totalMin;
-    await guarded('监控tick', runMonitorTick);
+    await guarded('监控tick', async () => {
+      lastMonitorMinute = totalMin;
+      await runMonitorTick();
+    });
   }
 
   // 每 2 小时采集评论数据
   if (totalMin % ANALYZER_INTERVAL_MIN === 0 && totalMin !== lastAnalyzerMinute) {
-    lastAnalyzerMinute = totalMin;
-    await guarded('评论数据采集', runAnalyzer);
+    await guarded('评论数据采集', async () => {
+      lastAnalyzerMinute = totalMin;
+      await runAnalyzer();
+    });
   }
 }
 
