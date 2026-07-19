@@ -57,7 +57,7 @@ export const MAX_BATCHES = Number(process.env.MAX_BATCHES) || 3;
 export const TARGET_QUALIFIED = Number(process.env.TARGET_QUALIFIED) || 150;
 export const EXPERIMENT_POSTS = Number(process.env.EXPERIMENT_POSTS) || 90;
 export const MAX_PAGES_PER_KEYWORD = Number(process.env.MAX_PAGES) || 8;
-export const COLLECT_HOURS = [16, 18, 20];
+export const COLLECT_HOURS = [12, 16, 18]; // EST: 覆盖 08:00-18:00 帖子，确保 20:00 发评论时均在 12h 内
 
 // ─── 监控时间点 ────────────────────────────────────────────
 export const MONITOR_POINTS = ['t2h', 't4h', 't8h', 't12h', 't24h', 't48h', 't72h'] as const;
