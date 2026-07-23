@@ -158,7 +158,7 @@ export async function runCollectBatch(): Promise<{ experimentId: string; qualifi
             const before = await count(POOL, { experiment_id: experimentId, author_uid: sp.authorUid });
             await upsert(POOL, { experiment_id: experimentId, author_uid: sp.authorUid }, {
               experiment_id: experimentId,
-              post_id: sp.postId,
+              tweet_id: sp.postId,
               post_url: sp.postUrl,
               content: sp.content,
               author_uid: sp.authorUid,
@@ -215,12 +215,12 @@ export async function finalizeExperiment(): Promise<{ experimentId: string } | n
   }
 
   const { rows: poolRows } = await query<{
-    id: string; post_id: string; post_url: string; content: string;
+    id: string; tweet_id: string; post_url: string; content: string;
     author_uid: string; author_name: string; followers: number;
     comments_count: number; reposts_count: number; likes_count: number; published_at: string;
   }>(POOL, { experiment_id: experimentId });
   const pool: ScreeningPost[] = poolRows.map((r) => ({
-    postId: r.post_id,
+    postId: r.tweet_id,
     postUrl: r.post_url,
     content: r.content,
     authorUid: r.author_uid,
@@ -259,7 +259,7 @@ export async function finalizeExperiment(): Promise<{ experimentId: string } | n
     const post = await insert<{ id: string }>('posts', {
       user_id: 'admin',
       experiment_id: experimentId,
-      post_id: p.postId,
+      tweet_id: p.postId,
       post_url: p.postUrl,
       content: p.content,
       author_uid: p.authorUid,
@@ -289,7 +289,7 @@ export async function finalizeExperiment(): Promise<{ experimentId: string } | n
     await insert('posts', {
       user_id: 'admin',
       experiment_id: experimentId,
-      post_id: p.postId,
+      tweet_id: p.postId,
       post_url: p.postUrl,
       content: p.content,
       author_uid: p.authorUid,

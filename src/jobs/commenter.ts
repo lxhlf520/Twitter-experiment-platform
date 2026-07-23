@@ -24,7 +24,7 @@ import {
 
 interface PostRow {
   id: string;
-  post_id: string;
+  tweet_id: string;
   post_url?: string;
   post_group: string | null;
   is_spare?: boolean;
@@ -76,12 +76,12 @@ async function captureBaseline(experimentId: string, accounts: TwitterAccount[])
   let ok = 0;
   for (let i = 0; i < posts.length; i++) {
     const p = posts[i];
-    const { tweet } = await getTweet(getCredentials(accounts[i % accounts.length]), p.post_id);
+    const { tweet } = await getTweet(getCredentials(accounts[i % accounts.length]), p.tweet_id);
     if (tweet) {
       await insert('post_snapshots', {
         experiment_id: experimentId,
         post_id: String(p.id),
-        tweet_id: p.post_id,
+        tweet_id: p.tweet_id,
         time_point: 't0',
         comments_count: tweet.legacy?.reply_count || 0,
         reposts_count: tweet.legacy?.retweet_count || 0,
@@ -157,8 +157,8 @@ export async function runDailyComment(expIdArg?: string): Promise<{ sent: number
       continue;
     }
 
-    console.log(`[${i + 1}/${logs.length}] ${post.post_id} [${log.post_group}] @${commentAccounts[ai % commentAccounts.length].nickname}`);
-    const r = await tryAllAccounts(post.post_id, log.comment_content, commentAccounts, ai);
+    console.log(`[${i + 1}/${logs.length}] ${post.tweet_id} [${log.post_group}] @${commentAccounts[ai % commentAccounts.length].nickname}`);
+    const r = await tryAllAccounts(post.tweet_id, log.comment_content, commentAccounts, ai);
     ai = (r.usedIdx + 1) % commentAccounts.length;
 
     if (r.ok) {
@@ -180,7 +180,7 @@ export async function runDailyComment(expIdArg?: string): Promise<{ sent: number
       while (!backfilled && sparePool.length > 0) {
         const spare = sparePool.shift()!;
         const spareIdx = sparePool.length; // 剩余备选数
-        console.log(`    🔄 备选回补(${spareIdx}篇剩余): ${spare.post_id} [${spare.author_name}]`);
+        console.log(`    🔄 备选回补(${spareIdx}篇剩余): ${spare.tweet_id} [${spare.author_name}]`);
         try {
           await updateOne('posts', { id: spare.id }, { is_spare: false, post_group: log.post_group });
           const spareLog = await insert<{ id: string }>('intervention_logs', {
@@ -193,7 +193,7 @@ export async function runDailyComment(expIdArg?: string): Promise<{ sent: number
             status: 'pending',
           });
           if (spareLog) {
-            const sr = await tryAllAccounts(spare.post_id, log.comment_content, commentAccounts, ai);
+            const sr = await tryAllAccounts(spare.tweet_id, log.comment_content, commentAccounts, ai);
             ai = (sr.usedIdx + 1) % commentAccounts.length;
             if (sr.ok) {
               const usedAccount2 = commentAccounts[sr.usedIdx];

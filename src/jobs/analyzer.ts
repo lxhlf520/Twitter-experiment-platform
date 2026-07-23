@@ -23,7 +23,7 @@ import {
 
 interface PostRow {
   id: string;
-  post_id: string;
+  tweet_id: string;
   experiment_id: string;
 }
 
@@ -40,7 +40,7 @@ async function collectPostComments(
   account: TwitterAccount,
 ): Promise<{ comments: number; users: number }> {
   const creds = getCredentials(account);
-  const detail = await getTweetDetailRaw(creds, post.post_id);
+  const detail = await getTweetDetailRaw(creds, post.tweet_id);
   if (!detail) return { comments: 0, users: 0 };
 
   // ── post_detail：保存原始帖子详情 ──
@@ -50,7 +50,7 @@ async function collectPostComments(
     {
       experiment_id: experimentId,
       post_id: post.id,
-      tweet_id: post.post_id,
+      tweet_id: post.tweet_id,
       raw_response: JSON.stringify(detail.raw),
       captured_at: now(),
     },
@@ -63,7 +63,7 @@ async function collectPostComments(
     {
       experiment_id: experimentId,
       post_id: post.id,
-      tweet_id: post.post_id,
+      tweet_id: post.tweet_id,
       raw_response: JSON.stringify(detail.raw),
       captured_at: now(),
     },
@@ -80,7 +80,7 @@ async function collectPostComments(
       {
         experiment_id: experimentId,
         post_id: post.id,
-        tweet_id: post.post_id,
+        tweet_id: post.tweet_id,
         comment_id: entry.comment_id,
         parent_comment_id: entry.parent_comment_id,
         author_uid: entry.author_uid,
@@ -133,7 +133,7 @@ async function collectExperiment(experimentId: string, accounts: TwitterAccount[
       totalComments += comments;
       totalUsers += users;
     } catch (e: any) {
-      console.log(`    ⚠️ ${post.post_id} 评论采集失败: ${e.message}`);
+      console.log(`    ⚠️ ${post.tweet_id} 评论采集失败: ${e.message}`);
     }
     await sleep(500 + Math.random() * 1000);
     if ((i + 1) % 20 === 0) {

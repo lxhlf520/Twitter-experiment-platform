@@ -26,7 +26,7 @@ import {
 
 interface PostRow {
   id: string;
-  post_id: string;
+  tweet_id: string;
 }
 
 /** 采集指定实验在指定监控点的全部帖快照 */
@@ -35,12 +35,12 @@ async function capturePoint(experimentId: string, point: string, accounts: Twitt
   let ok = 0;
   for (let i = 0; i < posts.length; i++) {
     const p = posts[i];
-    const { tweet } = await getTweet(getCredentials(accounts[i % accounts.length]), p.post_id);
+    const { tweet } = await getTweet(getCredentials(accounts[i % accounts.length]), p.tweet_id);
     if (tweet) {
       await insert('post_snapshots', {
         experiment_id: experimentId,
         post_id: String(p.id),
-        tweet_id: p.post_id,
+        tweet_id: p.tweet_id,
         time_point: point,
         comments_count: tweet.legacy?.reply_count || 0,
         reposts_count: tweet.legacy?.retweet_count || 0,
